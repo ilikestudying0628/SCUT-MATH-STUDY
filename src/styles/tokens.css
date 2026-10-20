@@ -1,0 +1,85 @@
+/* 设计变量：学术纸张 + SCUT 蓝 */
+:root {
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+    "Microsoft YaHei", "Noto Sans SC", sans-serif;
+  --font-serif: Georgia, "Songti SC", "Noto Serif SC", "STSong", "SimSun", serif;
+  --font-mono: "Cascadia Code", "JetBrains Mono", Consolas, "Courier New", monospace;
+
+  --fs-base: 15px;
+  --fs-sm: 13px;
+  --fs-xs: 12px;
+  --fs-lg: 17px;
+  --fs-xl: 22px;
+  --fs-2xl: 28px;
+
+  --radius-xs: 6px;
+  --radius-sm: 9px;
+  --radius: 13px;
+  --radius-lg: 20px;
+  --radius-pill: 999px;
+
+  --sidebar-w: 238px;
+  --topbar-h: 62px;
+  --content-max: 1180px;
+
+  --accent: #0b4f8a;
+  --accent-strong: #073a68;
+  --accent-soft: rgba(11, 79, 138, 0.1);
+  --gold: #a8710f;
+  --ok: #1b7a4b;
+  --warn: #a35a06;
+  --danger: #b3261e;
+  --danger-soft: rgba(179, 38, 30, 0.09);
+
+  --bg: #f4f1e9;
+  --bg-grid: rgba(11, 79, 138, 0.035);
+  --surface: #fffefa;
+  --surface-2: #f8f5ec;
+  --surface-3: #efeade;
+  --border: #ddd6c6;
+  --border-strong: #c8bfa9;
+  --text: #20262d;
+  --text-soft: #4b5560;
+  --text-mute: #77828d;
+
+  --shadow-sm: 0 1px 2px rgba(32, 38, 45, 0.06);
+  --shadow: 0 6px 20px rgba(32, 38, 45, 0.08);
+  --shadow-lg: 0 18px 50px rgba(32, 38, 45, 0.18);
+
+  --focus: 0 0 0 3px rgba(11, 79, 138, 0.22);
+  --transition: 140ms ease;
+}
+
+[data-theme='dark'] {
+  --accent: #7fb3e0;
+  --accent-strong: #a9cdec;
+  --accent-soft: rgba(127, 179, 224, 0.14);
+  --gold: #d8a94a;
+  --ok: #68c797;
+  --warn: #e0a558;
+  --danger: #f2857d;
+  --danger-soft: rgba(242, 133, 125, 0.12);
+
+  --bg: #12161a;
+  --bg-grid: rgba(255, 255, 255, 0.02);
+  --surface: #191f25;
+  --surface-2: #1f262d;
+  --surface-3: #262e36;
+  --border: #303a43;
+  --border-strong: #43505b;
+  --text: #e9edf1;
+  --text-soft: #b7c1cb;
+  --text-mute: #8a95a1;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  --shadow-lg: 0 22px 60px rgba(0, 0, 0, 0.6);
+  --focus: 0 0 0 3px rgba(127, 179, 224, 0.28);
+}
+
+:root {
+  color-scheme: light;
+}
+[data-theme='dark'] {
+  color-scheme: dark;
+}

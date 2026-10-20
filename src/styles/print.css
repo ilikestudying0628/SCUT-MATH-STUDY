@@ -1,0 +1,85 @@
+@media print {
+  :root {
+    --fs-base: 12pt;
+  }
+
+  body {
+    background: #fff !important;
+    color: #000;
+    background-image: none;
+  }
+
+  .no-print,
+  .sidebar,
+  .topbar,
+  .setup-banner,
+  .toast-host,
+  .nav-backdrop,
+  .side-backdrop,
+  .toast,
+  .backdrop,
+  .drawer-backdrop,
+  .composer,
+  .chat-side,
+  .config-col,
+  .submit-bar,
+  .history,
+  .quiz-actions {
+    display: none !important;
+  }
+
+  .shell,
+  .main,
+  .content {
+    display: block !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+  }
+
+  .page {
+    padding: 0;
+    max-width: none;
+  }
+
+  .printable {
+    display: block !important;
+    border: none !important;
+    box-shadow: none !important;
+    background: #fff !important;
+  }
+
+  /* 打印时展开答案与解析 */
+  .printable .collapsed {
+    display: block !important;
+  }
+
+  a {
+    color: #000;
+    text-decoration: none;
+  }
+
+  .md table {
+    break-inside: avoid;
+  }
+
+  .q-card {
+    break-inside: avoid;
+    page-break-inside: avoid;
+    border: 1px solid #ccc !important;
+    box-shadow: none !important;
+  }
+
+  .q-card .option {
+    border: 1px solid #ddd !important;
+    background: #fff !important;
+  }
+
+  .grade-detail {
+    display: none !important;
+  }
+
+  @page {
+    margin: 16mm;
+  }
+}
