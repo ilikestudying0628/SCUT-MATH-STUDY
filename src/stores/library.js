@@ -4,6 +4,10 @@ import { parseFile, parsePastedText } from '../core/parsers/index.js'
 import { chunkSections } from '../core/chunker.js'
 import { buildIndex } from '../core/bm25.js'
 import { stripExtension } from '../core/parsers/common.js'
+import { detectFormulaGaps } from '../core/parsers/quality.js'
+import { readImageAsDataUrl, renderPdfPageImages } from '../core/parsers/pdfRender.js'
+import { transcribeImages } from '../api/vision.js'
+import * as mock from '../api/mock.js'
 import { toPlain } from '../core/text.js'
 import { useSettingsStore } from './settings.js'
 
@@ -22,6 +26,7 @@ export const useLibraryStore = defineStore('library', {
     filterCourse: 'all',
     search: '',
     revision: 0,
+    abort: null,
   }),
 
   getters: {
@@ -53,6 +58,23 @@ export const useLibraryStore = defineStore('library', {
       this.loading = true
       try {
         this.docs = await db.listDocs()
+        // 旧数据没有 quality 字段：按「每页字数」补一个弱信号，提醒可以 AI 识别
+        let changed = false
+        for (const doc of this.docs) {
+          if (doc.quality || !/pdf/i.test(doc.fileName || '') || !doc.meta?.pages) continue
+          const charsPerPage = Math.round((doc.charCount || 0) / Math.max(1, doc.meta.pages))
+          if (charsPerPage < 260) {
+            doc.quality = { needsRecognition: true, charsPerPage, reason: 'low-density' }
+            changed = true
+          }
+        }
+        if (changed) {
+          await Promise.all(
+            this.docs
+              .filter((doc) => doc.quality?.reason === 'low-density')
+              .map((doc) => db.putDoc(toPlain(doc))),
+          )
+        }
         this.chunks = await db.getAllChunks()
         this.revision += 1
         this.loaded = true
@@ -103,6 +125,7 @@ export const useLibraryStore = defineStore('library', {
 
     async _applyParsed(doc, parsed) {
       const settings = useSettingsStore()
+      const quality = detectFormulaGaps(parsed.text, parsed.meta || {})
       const chunkList = chunkSections(
         (parsed.sections || []).map((section) => ({
           text: section.text,
@@ -114,6 +137,23 @@ export const useLibraryStore = defineStore('library', {
           overlap: Math.round((Number(settings.chunkSize) || DEFAULT_CHUNK.maxChars) / 8),
         },
       )
+
+      // 图片资料没有文本层：先入库，等用户点「AI 识别」
+      if (!chunkList.length && parsed.meta?.needsRecognition) {
+        Object.assign(doc, {
+          status: 'ready',
+          charCount: 0,
+          chunkCount: 0,
+          warnings: parsed.warnings || [],
+          quality: { ...quality, needsRecognition: true },
+          meta: parsed.meta || {},
+          error: '',
+          updatedAt: Date.now(),
+        })
+        await db.putDoc(toPlain(doc))
+        await this.refreshChunks()
+        return doc
+      }
 
       if (!chunkList.length) {
         throw new Error('没有切出可用的文本块，可能内容为空。')
@@ -127,7 +167,13 @@ export const useLibraryStore = defineStore('library', {
         status: 'ready',
         charCount: parsed.text.length,
         chunkCount: chunkList.length,
-        warnings: parsed.warnings || [],
+        warnings: [
+          ...(parsed.warnings || []),
+          ...(quality.needsRecognition
+            ? ['文字层里缺少公式（数学字体没有 Unicode 映射），建议点「AI 识别」重新转录。']
+            : []),
+        ],
+        quality,
         meta: parsed.meta || {},
         error: '',
         updatedAt: Date.now(),
@@ -252,6 +298,104 @@ export const useLibraryStore = defineStore('library', {
       await db.deleteDocCascade(docId)
       this.docs = this.docs.filter((d) => d.id !== docId)
       await this.refreshChunks()
+    },
+
+    /**
+     * 用视觉模型把 PDF 页面（或图片）转录成带 LaTeX 的 Markdown。
+     * 用于文字层缺公式的 PDF 与拍照/截图资料。
+     */
+    async recognizeDoc(docId) {
+      const settings = useSettingsStore()
+      const doc = this.docs.find((d) => d.id === docId)
+      if (!doc) throw new Error('资料不存在')
+      if (!settings.canCallApi) {
+        throw new Error('AI 识别需要 DeepSeek API Key（也可以先打开演示模式体验流程）。')
+      }
+      const stored = await db.getFileBlob(docId)
+      if (!stored?.blob) throw new Error('找不到原始文件，无法渲染页面；可以改用「粘贴文本」。')
+
+      const controller = new AbortController()
+      this.abort = controller
+      try {
+        let images = []
+        const isPdf = /pdf/i.test(doc.mime || '') || /\.pdf$/i.test(doc.fileName || '')
+        if (isPdf) {
+          images = await renderPdfPageImages(stored.blob, {
+            maxPages: 20,
+            onProgress: (done, total) => {
+              this.jobs[docId] = { stage: 'render', done, total, label: '渲染页面' }
+            },
+          })
+        } else if (
+          /^image\//.test(doc.mime || '') ||
+          /\.(png|jpe?g|webp|bmp)$/i.test(doc.fileName || '')
+        ) {
+          const image = await readImageAsDataUrl(stored.blob)
+          images = [{ page: 1, ...image }]
+        } else {
+          throw new Error('只有 PDF 和图片支持 AI 识别，其他格式可以直接编辑文本。')
+        }
+
+        this.jobs[docId] = {
+          stage: 'ocr',
+          done: 0,
+          total: images.length,
+          label: '识别公式',
+        }
+        const runner = settings.mockMode ? mock.transcribeImages : transcribeImages
+        const pages = await runner({
+          apiKey: settings.apiKey,
+          baseUrl: settings.baseUrl,
+          model: settings.model,
+          images,
+          signal: controller.signal,
+          hint: doc.fileName || '',
+          onProgress: (done, total) => {
+            this.jobs[docId] = { stage: 'ocr', done, total, label: '识别公式' }
+          },
+        })
+
+        if (!pages.length) {
+          throw new Error('没有识别出文字，可能是空白页或图片过于模糊。')
+        }
+
+        // 模型有时会自带「## 第 n 页」标题，去掉避免和我们的分页标题重复
+        const cleanedPages = pages.map((p) => ({
+          page: p.page,
+          text: String(p.text || '')
+            .replace(/^\s*#{1,4}\s*(?:第\s*)?\d+\s*页[^\n]*\n+/, '')
+            .trim(),
+        }))
+
+        const text = cleanedPages.map((p) => `## 第 ${p.page} 页\n\n${p.text}`).join('\n\n')
+        const chunkList = chunkSections(
+          cleanedPages.map((p) => ({ page: p.page, heading: `第 ${p.page} 页`, text: p.text })),
+          { maxChars: 800, overlap: 100 },
+        )
+        await db.putDocText(docId, text)
+        await db.putChunks(docId, chunkList)
+
+        Object.assign(doc, {
+          status: 'ready',
+          charCount: text.length,
+          chunkCount: chunkList.length,
+          warnings: [],
+          quality: { needsRecognition: false, recognized: true },
+          meta: { ...(doc.meta || {}), recognizedAt: Date.now(), recognizedPages: pages.length },
+          error: '',
+          updatedAt: Date.now(),
+        })
+        await db.putDoc(toPlain(doc))
+        await this.refreshChunks()
+        return doc
+      } finally {
+        this.abort = null
+        delete this.jobs[docId]
+      }
+    },
+
+    stopRecognize() {
+      this.abort?.abort()
     },
 
     async reload() {

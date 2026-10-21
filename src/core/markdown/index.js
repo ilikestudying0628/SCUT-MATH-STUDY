@@ -74,6 +74,10 @@ md.renderer.rules.link_open = (tokens, idx, options, env, self) => {
   return defaultLinkOpen(tokens, idx, options, env, self)
 }
 
+// 表格包一层横向滚动容器：窄屏不撑破气泡，宽表格也只在自己的区域里滚动
+md.renderer.rules.table_open = () => '<div class="table-scroll"><table>\n'
+md.renderer.rules.table_close = () => '</table></div>\n'
+
 export function renderMarkdown(text) {
   if (!text) return ''
   try {

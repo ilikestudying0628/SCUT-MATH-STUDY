@@ -9,20 +9,35 @@ const props = defineProps({
   job: { type: Object, default: null },
 })
 
-const emit = defineEmits(['preview', 'edit', 'delete', 'download'])
+const emit = defineEmits(['preview', 'edit', 'delete', 'recognize'])
 
 const statusLabel = computed(() => {
-  if (props.doc.status === 'ready') return '已入库'
+  if (props.job?.label) return props.job.label
+  if (props.doc.status === 'ready') return props.doc.meta?.kind === 'image' ? '待识别' : '已入库'
   if (props.doc.status === 'error') return '解析失败'
   return props.job?.stage === 'indexing' ? '建立索引' : '解析中'
 })
 
 const progressText = computed(() => {
   if (!props.job) return ''
-  if (props.job.stage === 'parsing' && props.job.total) {
-    return `${props.job.done}/${props.job.total} 页`
+  if ((props.job.stage === 'parsing' || props.job.stage === 'render' || props.job.stage === 'ocr') && props.job.total) {
+    return `${props.job.done}/${props.job.total} ${props.job.stage === 'render' ? '页' : props.job.stage === 'ocr' ? '页' : ''}`.trim()
   }
   return ''
+})
+
+const needsRecognition = computed(
+  () => Boolean(props.doc.quality?.needsRecognition) || props.doc.meta?.kind === 'image',
+)
+
+const canRecognize = computed(() => {
+  if (props.doc.status !== 'ready') return false
+  const isPdf = /pdf/i.test(props.doc.fileName || '') || /pdf/i.test(props.doc.mime || '')
+  const isImage =
+    /^image\//.test(props.doc.mime || '') ||
+    /\.(png|jpe?g|webp|bmp)$/i.test(props.doc.fileName || '') ||
+    props.doc.meta?.kind === 'image'
+  return isPdf || isImage
 })
 </script>
 
@@ -48,9 +63,14 @@ const progressText = computed(() => {
         <span class="muted">{{ formatRelative(doc.updatedAt || doc.createdAt) }}</span>
       </p>
 
-      <p v-if="doc.status === 'parsing'" class="progress">
+      <p v-if="doc.status === 'parsing' || job?.stage === 'render' || job?.stage === 'ocr'" class="progress">
         <span class="spinner"></span>
-        正在{{ job?.stage === 'indexing' ? '切分与建立索引' : '提取文字' }} {{ progressText }}
+        正在{{ job?.label || (job?.stage === 'indexing' ? '切分与建立索引' : '提取文字') }} {{ progressText }}
+      </p>
+
+      <p v-if="needsRecognition && !job" class="quality-warning">
+        <Icon name="alert" :size="14" />
+        文字层里缺公式（数学字体没有 Unicode 映射），句子会在公式处断掉；点右侧「AI 识别」可以逐页转录。
       </p>
 
       <p v-if="doc.error" class="error">
@@ -64,13 +84,22 @@ const progressText = computed(() => {
     </div>
 
     <div class="actions">
-      <button class="btn ghost sm" :disabled="doc.status !== 'ready'" @click="emit('preview', doc)">
+      <button
+        v-if="canRecognize && !job"
+        class="btn sm"
+        :class="{ primary: needsRecognition }"
+        :disabled="doc.status === 'parsing'"
+        @click="emit('recognize', doc)"
+      >
+        <Icon name="sparkle" :size="14" /> AI 识别
+      </button>
+      <button class="btn ghost sm" :disabled="doc.status !== 'ready' || Boolean(job)" @click="emit('preview', doc)">
         <Icon name="eye" :size="14" /> 查看
       </button>
-      <button class="btn ghost sm" :disabled="doc.status !== 'ready'" @click="emit('edit', doc)">
+      <button class="btn ghost sm" :disabled="doc.status !== 'ready' || Boolean(job)" @click="emit('edit', doc)">
         <Icon name="edit" :size="14" /> 编辑
       </button>
-      <button class="btn ghost sm" :disabled="doc.status === 'parsing'" @click="emit('delete', doc)">
+      <button class="btn ghost sm" :disabled="doc.status === 'parsing' || Boolean(job)" @click="emit('delete', doc)">
         <Icon name="trash" :size="14" /> 删除
       </button>
     </div>
@@ -151,6 +180,23 @@ const progressText = computed(() => {
   font-size: var(--fs-xs);
   color: var(--warn);
   line-height: 1.55;
+}
+
+.quality-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 8px 0 0;
+  padding: 7px 9px;
+  border-radius: var(--radius-xs);
+  background: color-mix(in srgb, var(--warn) 10%, transparent);
+  color: var(--warn);
+  font-size: var(--fs-xs);
+  line-height: 1.55;
+}
+.quality-warning svg {
+  flex: none;
+  margin-top: 2px;
 }
 
 .actions {

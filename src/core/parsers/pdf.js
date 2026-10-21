@@ -1,6 +1,8 @@
+import { cleanPdfPages } from './pdfCleanup.js'
+
 let pdfjsPromise = null
 
-async function loadPdfjs() {
+export async function loadPdfjs() {
   if (!pdfjsPromise) {
     pdfjsPromise = (async () => {
       const pdfjs = await import('pdfjs-dist')
@@ -17,7 +19,7 @@ function isCjk(ch) {
 }
 
 /** 把 pdf.js 的 textContent 还原成行：先按 y 聚行，再按 x 排序拼接 */
-export function itemsToText(items = []) {
+export function itemsToLines(items = []) {
   const parts = []
   for (const item of items) {
     const str = item?.str
@@ -31,7 +33,7 @@ export function itemsToText(items = []) {
       h: Number(item.height) || 10,
     })
   }
-  if (!parts.length) return ''
+  if (!parts.length) return []
 
   parts.sort((a, b) => b.y - a.y || a.x - b.x)
 
@@ -67,7 +69,25 @@ export function itemsToText(items = []) {
     const trimmed = line.trim()
     if (trimmed) lines.push(trimmed)
   }
-  return lines.join('\n')
+  return lines
+}
+
+export function itemsToText(items = []) {
+  return itemsToLines(items).join('\n')
+}
+
+/**
+ * 统计「字形缺失」的迹象：
+ * 数学字体缺 Unicode 映射时，pdf.js 只能拿到空白项，但它的宽度很大（对应整段公式）。
+ */
+export function countGlyphGaps(items = []) {
+  let gaps = 0
+  for (const item of items) {
+    const text = String(item?.str ?? '')
+    if (text.trim()) continue
+    if ((Number(item?.width) || 0) > 80) gaps += 1
+  }
+  return gaps
 }
 
 /**
@@ -88,13 +108,15 @@ export async function parsePdf(file, options = {}) {
 
   const total = doc.numPages
   const limit = Math.min(total, maxPages)
-  const sections = []
+  const pages = []
+  let gapCount = 0
 
   try {
     for (let pageNo = 1; pageNo <= limit; pageNo++) {
       const page = await doc.getPage(pageNo)
       const content = await page.getTextContent()
-      sections.push({ page: pageNo, text: itemsToText(content.items), heading: '' })
+      gapCount += countGlyphGaps(content.items)
+      pages.push({ page: pageNo, lines: itemsToLines(content.items) })
       page.cleanup?.()
       onProgress?.(pageNo, limit)
     }
@@ -106,9 +128,9 @@ export async function parsePdf(file, options = {}) {
     }
   }
 
+  const sections = cleanPdfPages(pages)
   const text = sections
-    .map((s) => s.text)
-    .filter(Boolean)
+    .map((section) => `${section.heading ? `## ${section.heading}\n` : ''}${section.text}`)
     .join('\n\n')
 
   return {
@@ -120,6 +142,7 @@ export async function parsePdf(file, options = {}) {
       parsedPages: limit,
       truncatedPages: total > limit,
       charsPerPage: total ? Math.round(text.length / limit) : 0,
+      gapCount,
     },
   }
 }

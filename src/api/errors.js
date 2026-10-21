@@ -49,7 +49,7 @@ export function errorFromResponse(status, bodyText) {
         status,
         code: body.code || 'bad_request',
         title: '请求参数错误',
-        hint: '试着减少资料范围、缩短问题，或在设置里调低上下文预算。',
+        hint: '试着减少资料范围、缩短问题，或在设置里调低上下文预算；如果是「AI 识别」，请把模型换成支持看图的 deepseek-flash。',
         detail: serverMsg,
       })
     case 401:

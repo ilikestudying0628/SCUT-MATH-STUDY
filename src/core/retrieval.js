@@ -1,5 +1,6 @@
 import { buildIndex, search } from './bm25.js'
 import { tokenize } from './tokenizer.js'
+import { expandQueryText } from './synonyms.js'
 
 const MAX_CITATION_CHARS = 1800
 
@@ -21,6 +22,21 @@ function jaccard(a, b) {
 /** 组合检索 query：问题 + 课程 + 侧重点 */
 export function buildQuery({ question, courseName = '', focus = '' }) {
   return [question, courseName, focus].filter(Boolean).join(' ').trim()
+}
+
+function mergeScores(primary, secondary, weight = 0.65) {
+  const merged = new Map()
+  for (const hit of primary) merged.set(hit.id, { ...hit })
+  for (const hit of secondary) {
+    const existing = merged.get(hit.id)
+    if (existing) {
+      existing.score += hit.score * weight
+      existing.matched += hit.matched
+    } else {
+      merged.set(hit.id, { ...hit, score: hit.score * weight })
+    }
+  }
+  return [...merged.values()].sort((a, b) => b.score - a.score || b.matched - a.matched)
 }
 
 /**
@@ -79,10 +95,20 @@ export function retrieveChunks(params) {
     buildIndex(pool.map((c) => ({ id: c.id, text: c.text, title: c.heading })))
 
   const byId = new Map(pool.map((c) => [c.id, c]))
-  const scored = search(index, tokens, {
-    limit: Math.max(80, topK * 10),
-    filter: (id) => byId.has(id),
-  })
+  const filter = (id) => byId.has(id)
+  const limit = Math.max(80, topK * 10)
+  let scored = search(index, tokens, { limit, filter })
+
+  // 直接关键词没召回足够片段时，用数学术语同义词扩展再搜一遍（降权合并）
+  if (scored.length < Math.min(3, Math.max(1, topK))) {
+    const extraTerms = expandQueryText(query)
+    if (extraTerms.length) {
+      const extraTokens = tokenize(extraTerms.join(' '))
+      const more = search(index, extraTokens, { limit, filter })
+      if (more.length) scored = mergeScores(scored, more, 0.65)
+    }
+  }
+
   result.candidateCount = scored.length
 
   if (!scored.length) {

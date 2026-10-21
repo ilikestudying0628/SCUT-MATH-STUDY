@@ -166,6 +166,32 @@ function demoSummary(messages) {
 > 填入 API Key 后会按你上传的资料生成完整提纲，并标注资料出处。`
 }
 
+function demoOcr(messages) {
+  const pageMatch = String(messages?.[1]?.content?.[0]?.text || '').match(/第\s*(\d+)\s*页/)
+  const page = pageMatch ? pageMatch[1] : '1'
+  return String.raw`## 第 ${page} 页（演示识别）
+
+> 演示模式：下面是模拟的视觉转录结果，用来验证「PDF 页面 → 图片 → LaTeX」的流程。
+
+一、叙述题（每题 3 分）
+
+1. 数列的 Cauchy 收敛原理：$\{a_n\}$ 收敛当且仅当对任意 $\varepsilon>0$，存在 $N$，当 $m,n>N$ 时 $|a_m-a_n|<\varepsilon$。
+
+2. 写出 $\lim_{x\to x_0}f(x)=+\infty$ 与 $\lim_{x\to+\infty}f(x)=A$ 的 $\varepsilon$-$\delta$ 定义。
+
+3. $\lim_{x\to x_0}f(x)$ 存在的 Heine 定理：对任意趋于 $x_0$ 的数列 $\{x_n\}$，$\lim_{n\to\infty}f(x_n)$ 都存在且相等。
+
+二、计算题（每题 5 分）
+
+1. 设 $x=t-\sin t,\ y=1-\cos t$ 确定隐函数 $y(x)$，求二阶微分 $\mathrm{d}^2y$。
+
+2. 求极限 $\lim_{x\to 0}\left(\frac{1}{x}-\frac{1}{\tan x}\right)$。
+
+3. 求极限 $\lim_{n\to\infty}\left(1+\frac{1}{n}-\frac{1}{n^2}\right)^n$。
+
+4. 设 $y=x^2\sin x$，求 $y^{(80)}$。`
+}
+
 export async function streamChat(params) {
   const { messages = [], onDelta, onReasoning, onUsage, signal, model } = params
   const system = systemText(messages)
@@ -198,6 +224,15 @@ export async function streamChat(params) {
     return { content: text, reasoning: '', usage: null, finishReason: 'stop' }
   }
 
+  if (system.includes('[TASK:OCR]')) {
+    const text = demoOcr(messages)
+    for (const piece of text.match(/[\s\S]{1,80}/g) || []) {
+      await sleep(12, signal)
+      onDelta?.(piece, piece)
+    }
+    return { content: text, reasoning: '', usage: null, finishReason: 'stop' }
+  }
+
   const answer = chatAnswer(messages)
   if (model === 'deepseek-reasoner') {
     // 演示一下思考过程的样子
@@ -225,6 +260,7 @@ export async function chatOnce(params) {
   if (system.includes('[TASK:QUIZ]')) text = demoQuiz(messages)
   else if (system.includes('[TASK:GRADE]')) text = demoGrade(messages)
   else if (system.includes('[TASK:SUMMARY]')) text = demoSummary(messages)
+  else if (system.includes('[TASK:OCR]')) text = demoOcr(messages)
   else text = chatAnswer(messages)
   return {
     text,
@@ -237,7 +273,24 @@ export async function chatOnce(params) {
 
 export async function testConnection() {
   await sleep(300)
-  return { models: ['deepseek-chat', 'deepseek-reasoner'], latencyMs: 300, baseUrl: 'mock://demo' }
+  return { models: ['deepseek-flash', 'deepseek-v4-pro'], latencyMs: 300, baseUrl: 'mock://demo' }
+}
+
+/** 演示模式下模拟逐页视觉转录 */
+export async function transcribeImages({ images = [], onProgress, signal } = {}) {
+  const pages = []
+  for (const image of images) {
+    await sleep(320, signal)
+    pages.push({
+      page: image.page,
+      text: demoOcr([
+        { role: 'assistant', content: '' },
+        { role: 'user', content: [{ type: 'text', text: `请转录第 ${image.page} 页` }] },
+      ]),
+    })
+    onProgress?.(pages.length, images.length)
+  }
+  return pages
 }
 
 export const DEMO_KEY = 'demo-mode-no-key-required'

@@ -101,4 +101,26 @@ describe('retrieval', () => {
     expect(docIds.size).toBe(2)
     expect(result.contextText.length).toBeGreaterThan(0)
   })
+
+  it('口语问法能通过术语扩展召回资料', () => {
+    const seriesChunks = [
+      {
+        id: 'd1:0',
+        docId: 'd1',
+        index: 0,
+        heading: '级数',
+        page: 1,
+        text: '比值判别法用于判定正项级数的敛散性：需要计算相邻两项之比的极限。',
+      },
+    ]
+    const result = retrieveChunks({
+      query: '这个东西到底是发散还是收敛',
+      chunks: seriesChunks,
+      docs,
+      topK: 4,
+      withNeighbors: false,
+    })
+    expect(result.citations.length).toBeGreaterThan(0)
+    expect(result.contextText).toContain('比值判别法')
+  })
 })

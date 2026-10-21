@@ -3,7 +3,10 @@ import { ref } from 'vue'
 import Icon from './Icon.vue'
 
 defineProps({
-  accept: { type: String, default: '.pdf,.docx,.pptx,.txt,.md,.markdown,.tex,.csv' },
+  accept: {
+    type: String,
+    default: '.pdf,.docx,.pptx,.txt,.md,.markdown,.tex,.csv,.png,.jpg,.jpeg,.webp',
+  },
   disabled: { type: Boolean, default: false },
 })
 
@@ -48,7 +51,7 @@ function onDrop(event) {
     </div>
     <div class="text">
       <strong>拖拽资料到这里，或点击选择</strong>
-      <span>支持 PDF / DOCX / PPTX / TXT / MD，单个不超过 60MB。扫描版 PDF 需要先转成文字。</span>
+      <span>支持 PDF / DOCX / PPTX / TXT / MD 与截图（PNG/JPG），单个不超过 60MB。公式缺失的 PDF 可以用「AI 识别」逐页转录。</span>
     </div>
     <span class="badge accent">本机解析</span>
   </div>

@@ -2,22 +2,91 @@ import katex from 'katex'
 
 const MAX_INLINE_MATH = 600
 
-function renderKatex(tex, displayMode) {
+/** 行内公式里出现这些结构时，改用 displaystyle 渲染，避免被压成小号 */
+const NEEDS_DISPLAY_STYLE =
+  /\\(frac|dfrac|tfrac|binom|sum|prod|coprod|int|iint|iiint|oint|bigcup|bigcap|lim|limsup|liminf)(?![a-zA-Z])|\\begin\{(aligned|alignedat|gathered|split|cases|array|matrix|pmatrix|bmatrix|vmatrix|Vmatrix|smallmatrix)\}/
+
+const FULL_WIDTH_FIX = [
+  [/，/g, ','],
+  [/；/g, ';'],
+  [/：/g, ':'],
+  [/（/g, '('],
+  [/）/g, ')'],
+  [/[−–—]/g, '-'],
+  [/×/g, '\\times '],
+  [/÷/g, '\\div '],
+]
+
+function escapeHtml(value) {
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+}
+
+export function needsDisplayStyle(tex) {
+  return NEEDS_DISPLAY_STYLE.test(String(tex ?? ''))
+}
+
+/** 依次尝试的候选写法：先修常见的“模型爱写、KaTeX 不认”的写法 */
+export function buildLatexCandidates(tex, displayMode) {
+  const base = String(tex ?? '').trim()
+  if (!base) return []
+  const styled =
+    !displayMode && needsDisplayStyle(base) && !/^\\displaystyle\b/.test(base)
+      ? `\\displaystyle ${base}`
+      : base
+
+  const list = [styled]
+
+  if (/\\label\{|\\tag\*?\{/.test(base)) {
+    list.push(
+      styled.replace(/\\label\{[^}]*\}/g, '').replace(/\\tag\*?\{[^}]*\}/g, ''),
+    )
+  }
+
+  if (/\\begin\{(eqnarray\*?|equation\*?|displaymath)\}/.test(base)) {
+    list.push(
+      styled
+        .replace(/\\begin\{(eqnarray\*?|equation\*?|displaymath)\}/g, '\\begin{aligned}')
+        .replace(/\\end\{(eqnarray\*?|equation\*?|displaymath)\}/g, '\\end{aligned}'),
+    )
+  }
+
+  if (/[，；：（）−–—×÷]/.test(base)) {
+    let fixed = styled
+    for (const [pattern, replacement] of FULL_WIDTH_FIX) fixed = fixed.replace(pattern, replacement)
+    list.push(fixed)
+  }
+
+  list.push(base)
+  if (!displayMode) list.push(`\\displaystyle ${base}`)
+  return [...new Set(list.filter(Boolean))]
+}
+
+function tryRender(tex, displayMode) {
   try {
     return katex.renderToString(tex, {
       displayMode,
-      throwOnError: false,
+      throwOnError: true,
       strict: 'ignore',
       trust: false,
       output: 'html',
     })
-  } catch (error) {
-    const safe = String(tex)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-    return `<code class="math-error" title="${String(error?.message || '').replace(/"/g, '&quot;')}">${safe}</code>`
+  } catch {
+    return null
   }
+}
+
+export function renderKatex(tex, displayMode = false) {
+  const candidates = buildLatexCandidates(tex, displayMode)
+  for (const candidate of candidates) {
+    const html = tryRender(candidate, displayMode)
+    if (html) return html
+  }
+  // 实在渲染不了：退回等宽源码，避免页面上出现刺眼的红色 KaTeX 报错
+  return `<code class="math-fallback" title="这段公式无法解析">${escapeHtml(tex)}</code>`
 }
 
 function findDollarClose(src, from) {
@@ -92,7 +161,6 @@ function inlineMath(state, silent) {
   const content = src.slice(start + 1, end)
   if (!content.trim() || content.length > MAX_INLINE_MATH) return false
   if (content.trim() !== content) return false
-  // 纯数字交给 KaTeX 渲染；货币写法已由「结尾 $ 后紧跟数字」的规则排除
   if (!silent) {
     const token = state.push('math_inline', 'math', 0)
     token.content = content
@@ -106,10 +174,10 @@ function inlineMath(state, silent) {
 function blockMath(state, startLine, endLine, silent) {
   let pos = state.bMarks[startLine] + state.tShift[startLine]
   const firstLineEnd = state.eMarks[startLine]
-  if (srcSlice(state, pos, pos + 2) !== '$$') return false
+  if (state.src.slice(pos, pos + 2) !== '$$') return false
   if (state.sCount[startLine] - state.blkIndent >= 4) return false
 
-  const first = srcSlice(state, pos + 2, firstLineEnd)
+  const first = state.src.slice(pos + 2, firstLineEnd)
   const sameLineClose = first.indexOf('$$')
   if (sameLineClose >= 0) {
     if (silent) return true
@@ -126,7 +194,7 @@ function blockMath(state, startLine, endLine, silent) {
   while (nextLine < endLine) {
     pos = state.bMarks[nextLine] + state.tShift[nextLine]
     const lineEnd = state.eMarks[nextLine]
-    const line = srcSlice(state, pos, lineEnd)
+    const line = state.src.slice(pos, lineEnd)
     const closeIdx = line.indexOf('$$')
     if (closeIdx >= 0) {
       content += `\n${line.slice(0, closeIdx)}`
@@ -144,17 +212,16 @@ function blockMath(state, startLine, endLine, silent) {
   return false
 }
 
-function srcSlice(state, from, to) {
-  return state.src.slice(from, to)
-}
-
 function renderInline(tokens, idx) {
   const token = tokens[idx]
   return renderKatex(token.content, Boolean(token.display))
 }
 
 function renderBlock(tokens, idx) {
-  return `<div class="math-block">${renderKatex(tokens[idx].content, true)}</div>\n`
+  const content = tokens[idx].content
+  // \tag 与 equation 环境会把编号贴在右侧，需要给容器留出空间
+  const hasTag = /\\tag\b/.test(content) || /\\begin\{equation\}/.test(content)
+  return `<div class="math-block${hasTag ? ' has-tag' : ''}">${renderKatex(content, true)}</div>\n`
 }
 
 /** markdown-it 数学插件：$…$ / $$…$$ / \(…\) / \[…\] */
@@ -166,5 +233,3 @@ export function mathPlugin(md) {
   md.renderer.rules.math_inline = renderInline
   md.renderer.rules.math_block = renderBlock
 }
-
-export { renderKatex }

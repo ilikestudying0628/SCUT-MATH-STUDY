@@ -90,6 +90,11 @@ export const useSettingsStore = defineStore('settings', {
         this.apiKey = ''
       }
       this.loaded = true
+      // 旧版本默认模型名（deepseek-chat / reasoner）已停产，自动迁移到当前默认模型
+      if (['deepseek-chat', 'deepseek-reasoner'].includes(this.model)) {
+        this.model = DEFAULT_MODEL
+        this.save()
+      }
       this.applyAppearance()
     },
 

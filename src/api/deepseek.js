@@ -4,18 +4,18 @@ export const DEFAULT_BASE_URL = 'https://api.deepseek.com'
 
 export const MODELS = [
   {
-    id: 'deepseek-chat',
-    label: 'deepseek-chat（通用对话，快）',
-    note: '适合答疑、出题、批改',
+    id: 'deepseek-flash',
+    label: 'deepseek-flash（推荐，支持看图）',
+    note: '速度快，支持图片/公式识别',
   },
   {
-    id: 'deepseek-reasoner',
-    label: 'deepseek-reasoner（带思考过程）',
-    note: '适合难题推导，速度较慢',
+    id: 'deepseek-v4-pro',
+    label: 'deepseek-v4-pro（更擅长长推导）',
+    note: '复杂证明与长文推理，速度较慢',
   },
 ]
 
-export const DEFAULT_MODEL = 'deepseek-chat'
+export const DEFAULT_MODEL = 'deepseek-flash'
 
 export function normalizeBaseUrl(input) {
   let s = String(input || DEFAULT_BASE_URL).trim()

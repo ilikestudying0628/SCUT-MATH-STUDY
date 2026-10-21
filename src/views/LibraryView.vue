@@ -29,6 +29,7 @@ const editorLoading = ref(false)
 const docs = computed(() => library.filteredDocs)
 const busy = computed(() => uploading.value > 0)
 const totalChars = computed(() => library.totalChars)
+const missingFormulaDocs = computed(() => library.docs.filter((doc) => doc.quality?.needsRecognition))
 
 onMounted(async () => {
   await library.init()
@@ -109,6 +110,29 @@ async function saveEditor(text) {
   }
 }
 
+async function recognizeDoc(doc) {
+  if (library.jobs[doc.id]) return
+  if (!settings.canCallApi) {
+    toast.warning('AI 识别需要先配置 API Key，或在设置里打开演示模式。')
+    return
+  }
+  const ok = await askConfirm({
+    title: 'AI 识别公式',
+    message: `会把《${doc.title}》${
+      doc.meta?.pages ? `渲染成 ${doc.meta.pages} 页图片` : '渲染成图片'
+    }，逐页交给 ${settings.model} 转录成带 LaTeX 的文本（消耗 API 额度）。完成后会替换现有文本与检索块，公式会完整保留。`,
+    confirmText: '开始识别',
+    danger: false,
+  })
+  if (!ok) return
+  try {
+    const updated = await library.recognizeDoc(doc.id)
+    toast.success(`识别完成：${updated.chunkCount} 个检索块`, 4000)
+  } catch (error) {
+    toast.error(error?.message || '识别失败', 6000)
+  }
+}
+
 async function removeDoc(doc) {
   const ok = await askConfirm({
     title: '删除资料',
@@ -171,6 +195,17 @@ function downloadOriginal(doc) {
       <span class="spinner"></span> 正在解析 {{ uploading }} 个文件，请稍候…
     </p>
 
+    <div v-if="missingFormulaDocs.length" class="quality-banner">
+      <Icon name="alert" :size="16" />
+      <span>
+        有 {{ missingFormulaDocs.length }} 份资料的文字层缺少公式（数学字体没有 Unicode 映射），句子会在公式处断掉。
+        点资料卡上的「AI 识别」可以逐页渲染成图片，交给视觉模型转录成 LaTeX。
+      </span>
+      <button class="btn sm" @click="recognizeDoc(missingFormulaDocs[0])">
+        <Icon name="sparkle" :size="14" /> 识别第一份
+      </button>
+    </div>
+
     <div class="toolbar">
       <div class="filters">
         <select v-model="library.filterCourse" class="select course-filter">
@@ -196,7 +231,7 @@ function downloadOriginal(doc) {
         @preview="openEditor"
         @edit="openEditor"
         @delete="removeDoc"
-        @download="downloadOriginal"
+        @recognize="recognizeDoc"
       />
     </div>
 
@@ -322,6 +357,33 @@ function downloadOriginal(doc) {
   margin: 10px 2px 0;
   font-size: var(--fs-xs);
   color: var(--accent);
+}
+
+.quality-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 11px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid color-mix(in srgb, var(--warn) 30%, var(--border));
+  background: color-mix(in srgb, var(--warn) 8%, var(--surface));
+  color: var(--warn);
+  font-size: var(--fs-xs);
+  line-height: 1.6;
+}
+.quality-banner svg {
+  flex: none;
+  margin-top: 2px;
+}
+.quality-banner span {
+  flex: 1;
+  color: var(--text-soft);
+}
+.quality-banner .btn {
+  flex: none;
+  color: var(--warn);
+  border-color: color-mix(in srgb, var(--warn) 40%, var(--border));
 }
 
 .toolbar {

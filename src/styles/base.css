@@ -385,7 +385,7 @@ button:disabled {
 /* ---------- Markdown 正文 ---------- */
 .md {
   font-size: var(--fs-base);
-  line-height: 1.78;
+  line-height: 1.9;
   word-break: break-word;
   overflow-wrap: anywhere;
 }
@@ -458,10 +458,16 @@ button:disabled {
 .md table {
   border-collapse: collapse;
   width: 100%;
-  margin: 0.9em 0;
+  margin: 0;
   font-size: var(--fs-sm);
-  display: block;
+}
+.md .table-scroll {
+  margin: 0.9em 0;
   overflow-x: auto;
+  border-radius: var(--radius-sm);
+}
+.md .table-scroll table {
+  min-width: 100%;
 }
 .md th,
 .md td {
@@ -482,13 +488,45 @@ button:disabled {
 .md img {
   max-width: 100%;
 }
-.md .katex-display {
+/* 行间公式：滚动条只出现在公式块上，且短公式不会凭空出现滚动条 */
+.md .math-block {
+  margin: 0.85em 0;
+  padding: 0.1em 0;
   overflow-x: auto;
   overflow-y: hidden;
-  padding: 4px 0;
+}
+/* KaTeX 的 \tag 编号贴在右侧，留出空间避免多出 1em 滚动条 */
+.md .math-block.has-tag {
+  padding-right: 2.4em;
+}
+.md .math-block .katex-display {
+  margin: 0;
+}
+.md .katex-display {
+  overflow: visible;
 }
 .md .katex {
-  font-size: 1.03em;
+  font-size: 1.04em;
+}
+.md .math-fallback {
+  display: inline-block;
+  max-width: 100%;
+  overflow-x: auto;
+  vertical-align: middle;
+  padding: 0.1em 0.45em;
+  border-radius: var(--radius-xs);
+  border: 1px dashed var(--border-strong);
+  background: var(--surface-2);
+  color: var(--text-soft);
+  font-family: var(--font-mono);
+  font-size: 0.86em;
+  white-space: pre;
+}
+.md .math-fallback::before {
+  content: '公式未解析：';
+  color: var(--text-mute);
+  font-family: var(--font-sans);
+  font-size: 0.9em;
 }
 
 /* 引用小标签 */

@@ -52,6 +52,16 @@ const scopeSummary = computed(() => {
   return '全部资料'
 })
 
+const weakDocs = computed(() => {
+  const pool =
+    chat.scope === 'none'
+      ? []
+      : chat.scope === 'docs'
+        ? readyDocs.value.filter((doc) => chat.scopeDocIds.includes(doc.id))
+        : readyDocs.value
+  return pool.filter((doc) => doc.quality?.needsRecognition)
+})
+
 watch(
   () => {
     const last = messages.value[messages.value.length - 1]
@@ -326,6 +336,15 @@ defineExpose({ send })
           <button v-if="messages.length" class="btn ghost sm" @click="clearMessages">清空</button>
         </div>
       </header>
+
+      <div v-if="weakDocs.length" class="weak-note">
+        <Icon name="alert" :size="15" />
+        <span>
+          这 {{ weakDocs.length }} 份资料的文字层缺少公式（数学字体没有 Unicode 映射），回答可能出现断句或猜测。
+          到资料库点「AI 识别」可以逐页转录成 LaTeX。
+        </span>
+        <RouterLink to="/library" class="weak-link">去识别</RouterLink>
+      </div>
 
       <div ref="scrollEl" class="messages" @scroll="onScroll">
         <div class="thread">
@@ -779,6 +798,34 @@ defineExpose({ send })
   background: var(--danger-soft);
   color: var(--text-soft);
   font-size: var(--fs-sm);
+}
+.weak-note {
+  flex: none;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 8px 22px 0;
+  padding: 8px 12px;
+  border-radius: var(--radius-xs);
+  border: 1px solid color-mix(in srgb, var(--warn) 26%, var(--border));
+  background: color-mix(in srgb, var(--warn) 8%, transparent);
+  color: var(--text-soft);
+  font-size: var(--fs-xs);
+  line-height: 1.55;
+}
+.weak-note svg {
+  flex: none;
+  color: var(--warn);
+  margin-top: 1px;
+}
+.weak-note span {
+  flex: 1;
+}
+.weak-link {
+  flex: none;
+  font-weight: 700;
+  color: var(--warn);
+  white-space: nowrap;
 }
 .chat-error strong {
   color: var(--danger);

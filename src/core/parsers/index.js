@@ -5,7 +5,9 @@ import { parsePptx } from './pptx.js'
 import { parsePastedText, parseTextFile } from './text.js'
 import { cleanText } from '../text.js'
 
-export const SUPPORTED_EXTENSIONS = ['pdf', 'docx', 'pptx', 'txt', 'md', 'markdown', 'tex', 'csv']
+export const SUPPORTED_EXTENSIONS = ['pdf', 'docx', 'pptx', 'txt', 'md', 'markdown', 'tex', 'csv', 'png', 'jpg', 'jpeg', 'webp']
+
+export const IMAGE_EXTENSIONS = ['png', 'jpg', 'jpeg', 'webp', 'bmp']
 
 export const MAX_FILE_BYTES = 60 * 1024 * 1024
 const MAX_TEXT_CHARS = 2_000_000
@@ -47,6 +49,15 @@ export async function parseFile(file, options = {}) {
 
   let result
   try {
+    if (/^image\//.test(file.type || '') || IMAGE_EXTENSIONS.includes(ext)) {
+      // 图片没有文本层，交给「AI 识别」用视觉模型转录
+      return {
+        text: '',
+        sections: [],
+        meta: { kind: 'image', ext, size, chars: 0, needsRecognition: true },
+        warnings: ['这是一张图片资料：点卡片上的「AI 识别」把它转成可检索的文字。'],
+      }
+    }
     switch (ext) {
       case 'pdf':
         result = await parsePdf(file, options)

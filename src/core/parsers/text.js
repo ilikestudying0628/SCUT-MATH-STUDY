@@ -1,5 +1,6 @@
 import { cleanText } from '../text.js'
 import { decodeTextBuffer, stripExtension } from './common.js'
+import { splitByHeadings } from './pdfCleanup.js'
 
 /** 按 Markdown 标题切节；没有标题就整篇一节 */
 export function sectionsFromMarkdown(text) {
@@ -41,9 +42,12 @@ export async function parseTextFile(file) {
   const name = file?.name || ''
   const isMarkdown = /\.(md|markdown)$/i.test(name)
 
+  const headingSections = isMarkdown ? [] : splitByHeadings(text)
   const sections = isMarkdown
     ? sectionsFromMarkdown(text)
-    : [{ heading: stripExtension(name), text }]
+    : headingSections.length
+      ? headingSections
+      : [{ heading: stripExtension(name), text }]
 
   return {
     text,
@@ -55,9 +59,13 @@ export async function parseTextFile(file) {
 /** 用户直接粘贴的文本 */
 export function parsePastedText(text, title = '') {
   const cleaned = cleanText(text)
-  const sections = /^#{1,6}\s+/m.test(cleaned)
+  const isMarkdown = /^#{1,6}\s+/m.test(cleaned)
+  const headingSections = isMarkdown ? [] : splitByHeadings(cleaned)
+  const sections = isMarkdown
     ? sectionsFromMarkdown(cleaned)
-    : [{ heading: title, text: cleaned }]
+    : headingSections.length
+      ? headingSections
+      : [{ heading: title, text: cleaned }]
   return {
     text: cleaned,
     sections,

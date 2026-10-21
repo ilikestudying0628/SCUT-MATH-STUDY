@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import QuestionCard from '../src/components/QuestionCard.vue'
 import CitationList from '../src/components/CitationList.vue'
 import MessageBubble from '../src/components/MessageBubble.vue'
+import DocCard from '../src/components/DocCard.vue'
 
 const singleQuestion = {
   id: 'q1',
@@ -65,6 +66,45 @@ describe('QuestionCard', () => {
       },
     })
     expect(wrapper.find('.stem').html()).toContain('katex')
+  })
+})
+
+describe('DocCard', () => {
+  const pdfDoc = {
+    id: 'doc1',
+    title: '数学分析试卷',
+    fileName: 'exam.pdf',
+    mime: 'application/pdf',
+    status: 'ready',
+    charCount: 400,
+    chunkCount: 2,
+    course: 'math-analysis',
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  }
+
+  it('PDF 提供 AI 识别入口', () => {
+    const wrapper = mount(DocCard, { props: { doc: pdfDoc, job: null } })
+    expect(wrapper.text()).toContain('AI 识别')
+  })
+
+  it('缺公式时给出提示', () => {
+    const wrapper = mount(DocCard, {
+      props: { doc: { ...pdfDoc, quality: { needsRecognition: true } }, job: null },
+    })
+    expect(wrapper.text()).toContain('文字层里缺公式')
+  })
+
+  it('识别中显示进度并禁用操作', () => {
+    const wrapper = mount(DocCard, {
+      props: { doc: pdfDoc, job: { stage: 'ocr', done: 1, total: 3, label: '识别公式' } },
+    })
+    expect(wrapper.text()).toContain('识别公式')
+    expect(wrapper.text()).toContain('1/3')
+    expect(wrapper.text()).not.toContain('AI 识别')
+    for (const button of wrapper.findAll('button')) {
+      expect(button.attributes('disabled')).toBeDefined()
+    }
   })
 })
 

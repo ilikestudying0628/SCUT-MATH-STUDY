@@ -225,7 +225,7 @@ const storageText = computed(() => {
               {{ model.label }}
             </option>
           </datalist>
-          <span class="hint">deepseek-chat 更快；deepseek-reasoner 会显示思考过程。</span>
+          <span class="hint">deepseek-flash 支持看图（公式/扫描件识别）；deepseek-v4-pro 更擅长长推导。</span>
         </div>
       </div>
 
@@ -388,6 +388,7 @@ const storageText = computed(() => {
       <ul>
         <li>本项目是纯前端应用：没有服务器，资料与对话不上传，只有你主动提问时会把你选中的资料片段发给 DeepSeek。</li>
         <li>PDF/PPT 由浏览器解析，公式、图表与扫描件可能提取不完整；解析后可以在资料库里手动修改文本。</li>
+        <li>如果 PDF 的文字层缺公式（数学字体没有 Unicode 映射），可以用资料卡上的「AI 识别」：页面渲染成图片后由视觉模型逐页转录成 LaTeX。</li>
         <li>检索使用本地 BM25 关键词算法（DeepSeek 没有 embedding 接口），对中文做了分词与二元组处理。</li>
         <li>AI 生成的定义、答案与评分都可能出错，请以教材、老师课件和真题为准。</li>
         <li>版本 v0.1.0 · <a href="https://platform.deepseek.com" target="_blank" rel="noopener">DeepSeek 开放平台</a></li>

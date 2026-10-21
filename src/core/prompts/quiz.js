@@ -39,7 +39,7 @@ export function buildQuizSystem({ courseName, difficulty = 'medium', pointTotal 
 3. 计算题要能算出具体结果；证明题的条件与结论必须自洽；不要出无解或条件缺失的题。
 4. 各题 points 之和约为 ${pointTotal}；每题 5–20 分。
 5. 不重复同一考法，由易到难排列；题干不要泄露答案。
-6. 数学式子用 LaTeX（行内 $...$，独立 $$...$$）。`
+6. 数学式子用 LaTeX（行内 $...$，独立 $$...$$）。排版要求：题干里避免用 \\frac、\\sum、\\int 等纵向结构直接塞进行内，必要时单独成行；多步推导用 aligned；不要用 \\tag、equation、eqnarray 环境；公式里不夹中文。`
 }
 
 /**
